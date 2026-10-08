@@ -1,9 +1,5 @@
 # AE-QKAD
 
-Code and results for *AE-QKAD: Confidence-Gated Adaptation of Quantum Kernel
-Anomaly Detection under a Circuit Budget for Edge-Assisted Continuous
-Authentication* (ICOIN 2027).
-
 AE-QKAD keeps a fidelity-kernel one-class SVM up to date as a user's typing
 drifts, without letting impostors into the model and without spending extra
 quantum circuits on updates. An edge server scores each sample against at most
@@ -102,17 +98,6 @@ same commands.
   on ibm_fez) was run separately with Qiskit Runtime; its job identifiers are
   in `hardware/`.
 
-## Citation
-
-```bibtex
-@inproceedings{biswas2027aeqkad,
-  author    = {Prantik Biswas and Subhag Sharma and Palak Verma and Harkeerat Kaur and Yamuna Prasad},
-  title     = {{AE-QKAD}: Confidence-Gated Adaptation of Quantum Kernel Anomaly Detection
-               under a Circuit Budget for Edge-Assisted Continuous Authentication},
-  booktitle = {Proc. Int. Conf. Information Networking (ICOIN)},
-  year      = {2027}
-}
-```
 
 ## License
 
