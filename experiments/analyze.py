@@ -112,6 +112,26 @@ def main(res):
         print("gate diagnostics (% of accepted samples):")
         print((100 * g.div(g.g_accepted.clip(lower=1), axis=0)).drop(columns="g_accepted").round(2))
 
+    section("Second round: soft margin, frontier, pinned anchors, robust threshold")
+    for name in ("nu", "frontier", "reserve", "robust"):
+        d = load(res, name)
+        if d is None:
+            continue
+        late = d[d.session.isin([5, 6, 7, 8])].groupby(["label", "seed", "user"])[["far", "frr"]].mean().groupby("label").mean()
+        print(pd.concat([per_user(d, "eer").mean().rename("eer"), per_user(d, "eer_k5").mean().rename("k5"),
+                         update_safety(d), late], axis=1).round(1))
+    rp, rs = load(res, "reserve_poison"), load(res, "reserve")
+    if rp is not None and rs is not None:
+        ctl = rs[rs.session == 8].groupby(["label", "user"]).atk_final_accept.mean().unstack(0)
+        att = rp[rp.session == 8].groupby(["label", "user"]).atk_final_accept.mean().unstack(0)
+        for lab in att:
+            base = lab.replace("_poison", "")
+            print(f"  poisoning {base:12s} without {ctl[base].mean():5.1f}%  with {att[lab].mean():5.1f}%")
+    rsh, sh = load(res, "reserve_shift"), load(res, "shift")
+    if rsh is not None and sh is not None:
+        both = pd.concat([sh, rsh])
+        print(both[both.session == 8].groupby("label").frr.mean().round(1).rename("FRR session 8 after change"))
+
     cl = load(res, "classical")
     if cl is not None:
         section("Classical static detectors")

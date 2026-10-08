@@ -23,25 +23,26 @@ from sklearn.preprocessing import StandardScaler
 from . import ocsvm
 from .kernels import N_QUBITS, Kernel, zz_states
 from .metrics import eer
-from .model import Detector, Settings
+from .model import Detector, Settings, initial_prototypes
 
 N_PROBE = 5
 FUSE_K = 5
 
 
-def calibrate(det, feats, reps, rng, cfg):
-    """Thresholds from 5-fold out-of-fold scores on genuine enrollment data."""
+def calibrate(det, feats, reps, rng, cfg, robust=False):
+    """Thresholds from 5-fold out-of-fold scores on genuine enrollment data.
+
+    With ``robust=True`` the access threshold is median - 1.645 * 1.4826 * MAD,
+    the 5% point of a normal fit that ignores the few enrollment samples with
+    near-zero fidelity to everything else.
+    """
     n = len(feats)
     folds = np.array_split(rng.permutation(n), 5)
     scores, mean_fid, drift = [], [], []
     for held in folds:
         train = np.setdiff1d(np.arange(n), held)
         G = det.enroll_gram[np.ix_(train, train)]
-        if det.memory in ("static", "naive"):
-            P = np.arange(len(train))
-        else:
-            centrality = (G.sum(1) - det.self_k) / (len(train) - 1)
-            P = np.array(ocsvm.farthest_point(G, cfg.m_max, int(np.argmax(centrality))))
+        P = np.array(initial_prototypes(det.memory, G, det.self_k, cfg.m_max, det.reserve))
         alpha, rho = ocsvm.fit(G[np.ix_(P, P)], cfg.nu)
         recent = feats[np.sort(train)[-cfg.drift_window:]]
         mu = recent.mean(0)
@@ -52,7 +53,12 @@ def calibrate(det, feats, reps, rng, cfg):
             scores.append(g / rho if det.relative else g)
             mean_fid.append(k.mean())
             drift.append(np.linalg.norm(feats[j] - mu) / spread)
-    return dict(tau=np.percentile(scores, cfg.tau_pct),
+    if robust:
+        med = np.median(scores)
+        tau = med - 1.645 * 1.4826 * np.median(np.abs(np.asarray(scores) - med))
+    else:
+        tau = np.percentile(scores, cfg.tau_pct)
+    return dict(tau=tau,
                 tau_q=np.percentile(scores, cfg.q_up),
                 eta=np.percentile(mean_fid, cfg.eta_pct),
                 dmax=np.percentile(drift, cfg.drift_pct))
@@ -118,9 +124,11 @@ def build_stream(data, user, session, rng, mode="iid", rate=0.1, block=20):
 
 def run_user(data, space, user, memory, gate="none", anchors=True, seed=0,
              mode="iid", rate=0.1, kind="fidelity", noisy=False, relative=True,
-             m_max=None, label=None, keep_scores=False):
+             m_max=None, nu=None, q_up=None, reserve=0, robust=False,
+             label=None, keep_scores=False):
     """Stream sessions 2-8 for one user and one configuration."""
-    cfg = Settings() if m_max is None else replace(Settings(), m_max=m_max)
+    overrides = {k: v for k, v in dict(m_max=m_max, nu=nu, q_up=q_up).items() if v is not None}
+    cfg = replace(Settings(), **overrides)
     u = data.test.index(user)
     stream_rng = np.random.default_rng([seed, u, 7])
     shot_rng = np.random.default_rng([seed, u, 11])
@@ -134,8 +142,8 @@ def run_user(data, space, user, memory, gate="none", anchors=True, seed=0,
     R = F if kind == "rbf" else space.states
 
     det = Detector(memory, gate, F[(user, 1)], R[(user, 1)], kernel, shot_rng,
-                   anchors=anchors, relative=relative, cfg=cfg)
-    th = calibrate(det, F[(user, 1)], R[(user, 1)], shot_rng, cfg)
+                   anchors=anchors, relative=relative, reserve=reserve, cfg=cfg)
+    th = calibrate(det, F[(user, 1)], R[(user, 1)], shot_rng, cfg, robust=robust)
     label = label or f"{memory}/{gate}"
 
     rows, kept, t = [], [], 0
@@ -181,7 +189,8 @@ def run_user(data, space, user, memory, gate="none", anchors=True, seed=0,
         probes = np.array(probe_groups)
         fused_gen = np.convolve(gen_scores, np.ones(FUSE_K) / FUSE_K, "valid")
         row = dict(label=label, memory=memory, gate=gate, kind=kind, noisy=noisy,
-                   relative=relative, m_max=cfg.m_max, mode=mode, rate=rate,
+                   relative=relative, m_max=cfg.m_max, nu=cfg.nu, q_up=cfg.q_up,
+                   reserve=reserve, robust=robust, mode=mode, rate=rate,
                    seed=seed, user=user, session=k,
                    eer=eer(gen_scores, probes.ravel()),
                    eer_k5=eer(fused_gen, probes.mean(1)),

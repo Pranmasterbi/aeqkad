@@ -25,9 +25,12 @@ def fit(G, nu=0.05):
 
 
 def farthest_point(G, m, start):
-    """Greedy max-min selection of m indices under the distance 1 - K."""
-    chosen = [start]
-    dist = 1 - G[start].copy()
+    """Greedy max-min selection of m indices under the distance 1 - K.
+
+    ``start`` is one index or a list of indices that are kept as chosen.
+    """
+    chosen = list(start) if isinstance(start, (list, tuple)) else [start]
+    dist = (1 - G[chosen]).min(0)
     while len(chosen) < min(m, len(G)):
         dist[chosen] = -np.inf
         j = int(np.argmax(dist))

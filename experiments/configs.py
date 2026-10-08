@@ -69,3 +69,44 @@ EXPERIMENTS = {
         dict(memory="mm", gate="full", mode="poison", label="mm_poison"),
     ]),
 }
+
+# --- second round: soft margin, admission frontier, pinned anchors, robust threshold
+EXPERIMENTS.update({
+    # nu*M < 1 makes the windowed OC-SVMs hard-margin; these restore a soft margin
+    "nu": dict(configs=[
+        dict(memory="window", nu=nu, label=f"window_nu{nu}", keep_scores=True)
+        for nu in (0.1, 0.2)
+    ] + [
+        dict(**AEQKAD, nu=nu, label=f"aeqkad_nu{nu}", keep_scores=True)
+        for nu in (0.1, 0.2)
+    ]),
+    # EER vs impostor admission over the update quantile and the budget
+    "frontier": dict(configs=[
+        dict(**AEQKAD, q_up=q, m_max=m, label=f"aeqkad_q{q}_M{m}")
+        for q in (10, 40, 50) for m in (8, 16, 32)
+    ] + [
+        dict(memory="window", gate="drift_only", label="aeqkad-drift_only"),
+        dict(memory="window", m_max=8, label="window_M8"),
+        dict(memory="window", m_max=32, label="window_M32"),
+    ]),
+    # anchoring that actually reaches the prototype set: k of 16 slots pinned
+    "reserve": dict(configs=[
+        dict(**AEQKAD, reserve=k, label=f"aeqkad_res{k}") for k in (4, 8)
+    ] + [
+        dict(memory="window", reserve=k, label=f"window_res{k}") for k in (4, 8)
+    ]),
+    "reserve_poison": dict(configs=[
+        dict(**AEQKAD, reserve=k, mode="poison", label=f"aeqkad_res{k}_poison") for k in (4, 8)
+    ] + [
+        dict(memory="window", reserve=8, mode="poison", label="window_res8_poison"),
+    ]),
+    "reserve_shift": dict(shift=dict(from_session=5, factor=1.3), configs=[
+        dict(**AEQKAD, reserve=k, label=f"aeqkad_res{k}") for k in (4, 8)
+    ]),
+    # threshold that is not dragged down by near-zero-fidelity enrollment samples
+    "robust": dict(configs=[
+        dict(memory="static", robust=True, label="static_robust", keep_scores=True),
+        dict(memory="window", robust=True, label="window_robust", keep_scores=True),
+        dict(**AEQKAD, robust=True, label="aeqkad_robust", keep_scores=True),
+    ]),
+})

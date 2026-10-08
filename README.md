@@ -27,6 +27,7 @@ experiments/
   run.py           runs them
   analyze.py       rebuilds the tables and statistics from a results folder
 results/           per-user, per-session outputs of the runs reported in the paper
+hardware/          IBM Quantum job identifiers of the ibm_fez runs
 notebooks/         Colab notebook that clones this repo and runs everything
 tests/
 ```
@@ -58,7 +59,7 @@ To rerun the experiments from scratch:
 
 ```bash
 python experiments/run.py --quick          # 4 users, 1 seed: a few minutes, checks the setup
-python experiments/run.py --out my_results # everything: about 2-3 hours on 2 CPU cores
+python experiments/run.py --out my_results # everything: about 4 hours on 2 CPU cores
 python experiments/analyze.py my_results
 ```
 
@@ -76,6 +77,10 @@ restarted with the same command.
 | `rate`, `ablation` | Table V | impostor rate; gate criteria, threshold form, budget |
 | `mm_ablation` | Sec. VI | anchors and gate criteria of the MM variant |
 | `classical` | Table II | static detectors on all 31 features and on the 8 PCA features |
+| `nu` | Sec. VI | soft margin (nu = 0.1, 0.2) for the windowed models |
+| `frontier` | Sec. VI, Table V | EER vs impostor admission over the update quantile and the budget; drift-only gate |
+| `reserve`, `reserve_poison`, `reserve_shift` | Sec. VI, Table V | 4 or 8 of the 16 prototype slots pinned to enrollment samples |
+| `robust` | Sec. VI | median/MAD access threshold instead of the 5th percentile |
 | `edge` | Sec. VI | time of one exact kernel decision on the local CPU |
 
 On Colab, open `notebooks/colab.ipynb`; it clones the repository and runs the
@@ -94,8 +99,8 @@ same commands.
   comparisons between methods are paired. Per-user results are averaged over
   the three seeds before the Wilcoxon tests.
 - The hardware validation (kernel estimation and static scoring for two users
-  on ibm_fez) was run separately with Qiskit Runtime and is not part of this
-  repository.
+  on ibm_fez) was run separately with Qiskit Runtime; its job identifiers are
+  in `hardware/`.
 
 ## Citation
 

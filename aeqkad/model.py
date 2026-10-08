@@ -11,7 +11,11 @@ Gates (which update criteria are active)
     none        learn from every accepted sample
     full        score margin/quantile + mean fidelity + drift check
     no_drift, no_margin, no_meanfid, score_only   ablations
-    union       full gate with the worst-case margin of Proposition 1
+    union       full gate with the worst-case Hoeffding margin
+    drift_only  accept-threshold plus drift check, no stricter quantile
+
+``reserve`` (window memory only) pins that many of the most central enrollment
+samples in the prototype set; FIFO replacement acts on the remaining slots.
 """
 
 import math
@@ -46,13 +50,28 @@ GATES = {
     "no_margin": (False, True, True, True),
     "score_only": (True, False, False, True),
     "union": "union",
+    "drift_only": (False, False, True, False),
 }
+
+
+def initial_prototypes(memory, G, self_k, m_max, reserve=0):
+    """Starting prototype indices. Budgeted memories use max-min selection from
+    the most central sample; with ``reserve`` the that-many most central samples
+    are taken first (and later pinned)."""
+    n = len(G)
+    if memory in ("static", "naive"):
+        return list(range(n))
+    centrality = (G.sum(1) - self_k) / (n - 1)
+    if reserve:
+        pinned = [int(i) for i in np.argsort(-centrality)[:reserve]]
+        return ocsvm.farthest_point(G, m_max, pinned)
+    return ocsvm.farthest_point(G, m_max, int(np.argmax(centrality)))
 
 
 class Detector:
 
     def __init__(self, memory, gate, feats, reps, kernel, rng,
-                 anchors=True, relative=True, cfg=Settings()):
+                 anchors=True, relative=True, reserve=0, cfg=Settings()):
         self.memory, self.gate, self.kernel, self.rng = memory, gate, kernel, rng
         self.relative, self.cfg = relative, cfg
         use_anchors = anchors and memory == "mm"
@@ -72,10 +91,10 @@ class Detector:
         self.items = [dict(f=feats[i], rep=reps[i], anchor=i in anchors_idx,
                            born=i - n, enrolled=True) for i in range(n)]
 
-        if memory in ("static", "naive"):
-            protos = list(range(n))
-        else:
-            protos = ocsvm.farthest_point(G, cfg.m_max, int(np.argmax(centrality)))
+        self.reserve = reserve if memory == "window" else 0
+        protos = initial_prototypes(memory, G, self.self_k, cfg.m_max, self.reserve)
+        for i in protos[:self.reserve]:
+            self.items[i]["anchor"] = True
         self.protos = list(protos)
         self.gram = G[np.ix_(protos, protos)].copy()
         self.buffer = list(range(n))
@@ -153,7 +172,8 @@ class Detector:
         if self.memory in ("naive", "window"):
             self._append(new, k)
             if self.memory == "window" and len(self.protos) > self.cfg.m_max:
-                oldest = int(np.argmin([self.items[i]["born"] for i in self.protos]))
+                free = [j for j, i in enumerate(self.protos) if not self.items[i]["anchor"]]
+                oldest = min(free, key=lambda j: self.items[self.protos[j]]["born"])
                 self._drop(oldest)
         elif self.memory == "mm":
             self._update_mm(new, k)
