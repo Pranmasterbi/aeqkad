@@ -28,19 +28,6 @@ notebooks/         Colab notebook that clones this repo and runs everything
 tests/
 ```
 
-## Setup
-
-Python 3.10 or later.
-
-```bash
-git clone https://github.com/Pranmasterbi/aeqkad.git
-cd aeqkad
-pip install -r requirements.txt
-```
-
-The CMU keystroke data (`DSL-StrongPasswordData.csv`) is downloaded from
-<https://www.cs.cmu.edu/~keystroke/> on first use. If you already have it,
-pass `--data path/to/DSL-StrongPasswordData.csv`.
 
 ## Reproducing the paper
 
